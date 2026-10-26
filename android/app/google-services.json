@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "649127616715",
+    "project_id": "konnecter-real",
+    "storage_bucket": "konnecter-real.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:649127616715:android:fb28b0cdf7df1eb84cfb4e",
+        "android_client_info": {
+          "package_name": "com.konnecter.real.konnecter_customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBllSG95e31SvCMGvWHsZwUob0hcTLntSY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
