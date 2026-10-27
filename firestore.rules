@@ -1,0 +1,350 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null;
+    }
+
+    function ownUser(uid) {
+      return signedIn()
+        && request.auth.uid == uid;
+    }
+
+    // Admin access must come from trusted Firebase Auth custom claims.
+    // Never trust a client-editable role field for admin permissions.
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.admin == true;
+    }
+
+    function approvedProvider(uid) {
+      return exists(
+          /databases/$(database)/documents/users/$(uid)
+        )
+        && get(
+          /databases/$(database)/documents/users/$(uid)
+        ).data.role == 'provider'
+        && get(
+          /databases/$(database)/documents/users/$(uid)
+        ).data.providerApproved == true;
+    }
+
+    function validBookingTransition() {
+      return (
+          resource.data.status == 'Requested'
+          && request.resource.data.status
+            in ['Accepted', 'Rejected', 'Cancelled']
+        )
+        || (
+          resource.data.status == 'Accepted'
+          && request.resource.data.status
+            in ['In progress', 'Cancelled']
+        )
+        || (
+          resource.data.status == 'In progress'
+          && request.resource.data.status == 'Completed'
+        );
+    }
+
+    // USER PROFILES
+    match /users/{uid} {
+
+      allow get, list: if ownUser(uid)
+        || (
+          resource.data.role == 'provider'
+          && resource.data.providerApproved == true
+        );
+
+      // A provider cannot approve themselves during registration.
+      allow create: if ownUser(uid)
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'name',
+          'role',
+          'providerApproved',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.role in ['customer', 'provider']
+        && request.resource.data.providerApproved == false;
+
+      allow update: if (
+          ownUser(uid)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.providerApproved
+            == resource.data.providerApproved
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['name', 'updatedAt'])
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['providerApproved', 'updatedAt'])
+          && request.resource.data.providerApproved is bool
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // PROVIDER SETTINGS
+    match /provider_settings/{uid} {
+
+      allow get, list: if ownUser(uid)
+        || (
+          resource.data.providerApproved == true
+          && approvedProvider(uid)
+        );
+
+      allow create: if ownUser(uid)
+        && approvedProvider(uid)
+        && request.resource.data.keys().hasOnly([
+          'available',
+          'services',
+          'description',
+          'experience',
+          'updatedAt',
+          'latitude',
+          'longitude',
+          'serviceRadiusKm',
+          'city',
+          'providerApproved'
+        ])
+        && request.resource.data.available is bool
+        && request.resource.data.services is list
+        && request.resource.data.services.size() <= 20
+        && request.resource.data.providerApproved == true;
+
+      allow update: if (
+          ownUser(uid)
+          && approvedProvider(uid)
+          && request.resource.data.keys().hasOnly([
+            'available',
+            'services',
+            'description',
+            'experience',
+            'rating',
+            'jobs',
+            'updatedAt',
+            'latitude',
+            'longitude',
+            'serviceRadiusKm',
+            'city',
+            'providerApproved'
+          ])
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'available',
+              'services',
+              'description',
+              'experience',
+              'updatedAt',
+              'latitude',
+              'longitude',
+              'serviceRadiusKm',
+              'city',
+              'providerApproved'
+            ])
+          && request.resource.data.available is bool
+          && request.resource.data.services is list
+          && request.resource.data.services.size() <= 20
+          && request.resource.data.providerApproved == true
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'providerApproved',
+              'rating',
+              'jobs',
+              'updatedAt'
+            ])
+          && (
+            !('providerApproved' in request.resource.data)
+            || request.resource.data.providerApproved is bool
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // BOOKINGS
+    match /bookings/{bookingId} {
+
+      allow create: if signedIn()
+        && request.resource.data.id == bookingId
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.customerEmail == request.auth.token.email
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'customerUid',
+          'customerEmail',
+          'service',
+          'provider',
+          'providerUid',
+          'providerEmail',
+          'bookingType',
+          'date',
+          'address',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'statusHistory'
+        ])
+        && request.resource.data.statusHistory is list
+        && request.resource.data.statusHistory.size() == 1
+        && request.resource.data.statusHistory[0].status == 'Requested'
+        && request.resource.data.status == 'Requested'
+
+        // IMPORTANT: use bracket notation for the "service" field.
+        && request.resource.data['service'] is string
+        && request.resource.data['service'].size() > 0
+
+        && request.resource.data.providerUid is string
+        && request.resource.data.providerUid.size() > 0
+        && request.resource.data.address is string
+        && request.resource.data.address.size() >= 8
+        && request.resource.data.bookingType in ['instant', 'scheduled']
+        && approvedProvider(request.resource.data.providerUid)
+
+        && request.resource.data.providerEmail
+          == get(
+            /databases/$(database)/documents/users/$(request.resource.data.providerUid)
+          ).data.email
+
+        && request.resource.data.provider
+          == get(
+            /databases/$(database)/documents/users/$(request.resource.data.providerUid)
+          ).data.name
+
+        && get(
+          /databases/$(database)/documents/provider_settings/$(request.resource.data.providerUid)
+        ).data.providerApproved == true
+
+        && get(
+          /databases/$(database)/documents/provider_settings/$(request.resource.data.providerUid)
+        ).data.available == true
+
+        && get(
+          /databases/$(database)/documents/provider_settings/$(request.resource.data.providerUid)
+        ).data.services.hasAny([
+          request.resource.data['service']
+        ]);
+
+      allow get, list: if signedIn()
+        && (
+          resource.data.customerUid == request.auth.uid
+          || resource.data.providerUid == request.auth.uid
+        );
+
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'statusHistory', 'updatedAt'])
+        && validBookingTransition()
+        && request.resource.data.statusHistory is list
+        && resource.data.statusHistory is list
+        && request.resource.data.statusHistory.size()
+          == resource.data.statusHistory.size() + 1
+        && request.resource.data.statusHistory[
+          request.resource.data.statusHistory.size() - 1
+        ].from == resource.data.status
+        && request.resource.data.statusHistory[
+          request.resource.data.statusHistory.size() - 1
+        ].to == request.resource.data.status
+        && request.resource.data.statusHistory[
+          request.resource.data.statusHistory.size() - 1
+        ].actorUid == request.auth.uid
+        && (
+          (
+            resource.data.providerUid == request.auth.uid
+            && approvedProvider(request.auth.uid)
+            && request.resource.data.status
+              in ['Accepted', 'Rejected', 'In progress', 'Completed']
+          )
+          || (
+            resource.data.customerUid == request.auth.uid
+            && request.resource.data.status == 'Cancelled'
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // SUPPORT TICKETS
+    match /support_tickets/{ticketId} {
+
+      allow create: if signedIn()
+        && request.resource.data.id == ticketId
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'customerUid',
+          'customerEmail',
+          'subject',
+          'message',
+          'status',
+          'createdAt'
+        ])
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.customerEmail == request.auth.token.email
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() >= 3
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.status == 'Open';
+
+      allow get, list: if signedIn()
+        && (
+          resource.data.customerUid == request.auth.uid
+          || isAdmin()
+        );
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'adminReply', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // USER DATA
+    match /user_data/{uid} {
+
+      allow read: if ownUser(uid);
+
+      allow create, update: if ownUser(uid)
+        && request.resource.data.keys().hasOnly([
+          'savedAddresses',
+          'updatedAt'
+        ])
+        && (
+          !('savedAddresses' in request.resource.data)
+          || (
+            request.resource.data.savedAddresses is list
+            && request.resource.data.savedAddresses.size() <= 10
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // DENY EVERYTHING NOT EXPLICITLY ALLOWED ABOVE
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

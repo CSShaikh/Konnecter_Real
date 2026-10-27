@@ -1,0 +1,32 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "provider_settings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "providerApproved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "available",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "city",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "services",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,1 +1,29 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"konnecter-real","appId":"1:649127616715:android:fb28b0cdf7df1eb84cfb4e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"konnecter-real","configurations":{"android":"1:649127616715:android:fb28b0cdf7df1eb84cfb4e","ios":"1:649127616715:ios:30633d2ebe26d0ca4cfb4e","web":"1:649127616715:web:5972ea7948b3bc164cfb4e"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "konnecter-real",
+          "appId": "1:649127616715:android:fb28b0cdf7df1eb84cfb4e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "konnecter-real",
+          "configurations": {
+            "android": "1:649127616715:android:fb28b0cdf7df1eb84cfb4e",
+            "ios": "1:649127616715:ios:30633d2ebe26d0ca4cfb4e",
+            "web": "1:649127616715:web:5972ea7948b3bc164cfb4e"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

@@ -36,12 +36,12 @@ class _KonnecterAppState extends State<KonnecterApp> {
 
   Future<void> _loadLanguage() async {
     try {
-      final savedLanguage = await LanguageStorage.load();
+      final language = await LanguageStorage.load();
 
       if (!mounted) return;
 
       setState(() {
-        _language = savedLanguage;
+        _language = language;
         _loadingLanguage = false;
       });
     } catch (_) {
@@ -59,9 +59,7 @@ class _KonnecterAppState extends State<KonnecterApp> {
 
     if (!mounted) return;
 
-    setState(() {
-      _language = language;
-    });
+    setState(() => _language = language);
   }
 
   @override
@@ -84,32 +82,66 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = FirebaseAuth.instance;
+
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.userChanges(),
+      stream: auth.authStateChanges(),
+      initialData: auth.currentUser,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError) {
+          return const _AuthErrorScreen();
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        if (snapshot.hasError) {
-          return const AuthScreen();
+        final user = snapshot.data ?? auth.currentUser;
+
+        if (user != null) {
+          return CustomerHomeScreen(key: ValueKey(user.uid), user: user);
         }
 
-        final user = snapshot.data;
-
-        if (user == null) {
-          return const AuthScreen();
-        }
-
-        if (user.emailVerified) {
-          return CustomerHomeScreen(user: user);
-        }
-
-        // Unverified email accounts ko home screen access nahi milega.
         return const AuthScreen();
       },
+    );
+  }
+}
+
+class _AuthErrorScreen extends StatelessWidget {
+  const _AuthErrorScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Unable to check your sign-in status.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+                  );
+                },
+                child: const Text('Return to sign in'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
